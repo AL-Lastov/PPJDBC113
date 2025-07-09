@@ -1,112 +1,116 @@
 package jm.task.core.jdbc.dao;
 
 import jm.task.core.jdbc.model.User;
+import jm.task.core.jdbc.service.LoggerService;
 import jm.task.core.jdbc.util.Util;
 
-import java.sql.*;
+import java.sql.ResultSet;
+import java.sql.PreparedStatement;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
-import static jm.task.core.jdbc.util.Util.*;
-
 public class UserDaoJDBCImpl implements UserDao {
-    private static Connection getConnection() throws SQLException {
+    private static UserDaoJDBCImpl instance;
+    private final Util util;
+    private final LoggerService logger;
 
-        Connection connection = DriverManager.getConnection(
-                Util.getProperty(Util.DB_URL),
-                Util.getProperty(Util.DB_USER),
-                Util.getProperty(Util.DB_PASSWORD));
 
-        return connection;
-    }
-
-    private static final String CREATE =
-            "CREATE TABLE IF NOT EXISTS users (" +
-                    "id BIGINT PRIMARY KEY AUTO_INCREMENT," +
-                    "name VARCHAR(25) not null ," +
-                    "last_name VARCHAR(25) not null ," +
-                    "age INT not null)";
+    private static final String CREATE = "CREATE TABLE IF NOT EXISTS users (id BIGINT PRIMARY KEY AUTO_INCREMENT, name VARCHAR(25) not null, last_name VARCHAR(25) not null, age INT not null)";
     private static final String DROP = "DROP TABLE IF EXISTS users";
     private static final String SAVE = "INSERT INTO users (name, last_name, age) VALUES (?,?,?)";
     private static final String REMOVE_BY_ID = "DELETE FROM users WHERE id = ?";
     private static final String GET_ALL = "SELECT * FROM users";
     private static final String CLEAR = "TRUNCATE TABLE users";
 
-    public UserDaoJDBCImpl() {
+    private UserDaoJDBCImpl() throws SQLException {
+        this.util = Util.getInstance();
+        this.logger = LoggerService.getInstance();
+    }
+
+    public static synchronized UserDaoJDBCImpl getInstance() throws SQLException {
+        if (instance == null) {
+            instance = new UserDaoJDBCImpl();
+        }
+        return instance;
     }
 
     public void createUsersTable() {
-        try (Connection connection = getConnection();
-             Statement statement = connection.createStatement()) {
+        try (Connection conn = util.getConnection();
+             Statement statement = conn.createStatement()) {
             statement.executeUpdate(CREATE);
         } catch (SQLException e) {
-            System.err.println("Таблица не создана: " + e.getMessage());
-            e.printStackTrace(System.err);
+            logger.error("Табличка не создана, во как " + e.getMessage(),
+                    "UserDaoJDBCImpl", "createUsersTable", null);
         }
     }
 
     public void dropUsersTable() {
-        try (Connection connection = getConnection();
-             Statement statement = connection.createStatement()) {
-            statement.executeUpdate(DROP);
+        try (Connection connection = util.getConnection();
+             Statement s = connection.createStatement()) {
+            s.executeUpdate(DROP);
         } catch (SQLException e) {
-            System.err.println("Таблица  не  удалена: " + e.getMessage());
-            e.printStackTrace(System.err);
+            logger.error("Табличка не удалена, так то " + e.getMessage(),
+                    "UserDaoJDBCImpl", "dropUsersTable", null);
         }
     }
 
 
     public void saveUser(String name, String lastName, Byte age) {
-        String ifNullName = (name == null) ? "" : name;
-        String ifNullLastName = (lastName == null) ? "" : lastName;
-        Byte ifNullAge = (age == null) ? 0 : age;
-        //Замена конструктора byte на Byte
-        // byte не может работать с ==null
-
-
-
-        try (Connection connection = getConnection();
+        try (Connection connection = util.getConnection();
              PreparedStatement ps = connection.prepareStatement(SAVE, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, ifNullName);
-            ps.setString(2, ifNullLastName);
-            ps.setInt(3, ifNullAge);
+            ps.setString(1, name);
+            ps.setString(2, lastName);
+            ps.setInt(3, age);
 
-            int insertControl = ps.executeUpdate();
-            if (insertControl == 0) {
-                throw new SQLException("Пользователь не добавлен в базу!");
+            int count = ps.executeUpdate();
+            if (count == 0) {
+                throw new SQLException("ААА! Пользователь не добавлен в базу!");
             }
 
             try (ResultSet generatedKeys = ps.getGeneratedKeys()) {
                 if (generatedKeys.next()) {
                     long id = generatedKeys.getLong(1);
-                    System.out.println("Пользователь добавлен с номером: " + id);
+                    logger.info("Юзер добавлен с Id:" + id,
+                            "UserDaoJDBCImpl", "saveUser", id);
                 } else {
-                    throw new SQLException("Не получилось добавить ID пользователю");
+                    throw new SQLException("Юзер осталлся без Id");
                 }
             }
         } catch (SQLException e) {
-            System.err.println("Пользователь не    сохранен " + e.getMessage());
-            e.printStackTrace(System.err);
+            logger.error("Юзер не сохранен" + e.getMessage(),
+                    "UserDaoJDBCImpl", "saveUser", null);
+            ;
         }
     }
 
     public void removeUserById(long id) {
-        try (Connection connection = getConnection();
+        try (Connection connection = util.getConnection();
              PreparedStatement ps = connection.prepareStatement(REMOVE_BY_ID)) {
             ps.setLong(1, id);
-            ps.executeUpdate();
+            int count = ps.executeUpdate();
+            if (count > 0) {
+                logger.info("Юзер удален с Id" + id,
+                        "UserDaoJDBCImpl", "removeUserById", id);
+            } else {
+                logger.warn("Юзер с Id " + id + " не найден",
+                        "UserDaoJDBCImpl", "removeUserById", id);
+            }
         } catch (SQLException e) {
-            System.err.println("Пользователь c с номером" + id + "не удален: " + e.getMessage());
-            e.printStackTrace(System.err);
+            logger.error("Ошибка удаления пользователя: " + e.getMessage(),
+                    "UserDaoJDBCImpl", "removeUserById", id);
         }
     }
 
     public List<User> getAllUsers() {
         List<User> users = new ArrayList<>();
 
-        try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(GET_ALL);
-             ResultSet resultSet = statement.executeQuery()) {
+        try (Connection connection = util.getConnection();
+             PreparedStatement ps = connection.prepareStatement(GET_ALL);
+             ResultSet resultSet = ps.executeQuery()) {
             while (resultSet.next()) {
 //                User user = new User();
 //                user.setId(resultSet.getLong("id"));
@@ -114,7 +118,7 @@ public class UserDaoJDBCImpl implements UserDao {
 //                user.setLastName(resultSet.getString("last_name"));
 //                user.setAge(resultSet.getByte("age"));
 //                users.add(user);
-//                добавил конструктор с ID что бы тут код был читабельнее
+//                добавил конструктор с ID что бы код был читабельнее
                 User user = new User(
                         resultSet.getLong("id"),
                         resultSet.getString("name"),
@@ -123,21 +127,24 @@ public class UserDaoJDBCImpl implements UserDao {
                 );
                 users.add(user);
             }
+            logger.info("Получено " + users.size() + " юзеров",
+                    "UserDaoJDBCImpl", "getAllUsers", null);
         } catch (SQLException e) {
-            System.err.println("Не удается вывести списк пользователей " + e.getMessage());
-            e.printStackTrace(System.err);
+            logger.error("Не получили юзера" + e.getMessage(),
+                    "UserDaoJDBCImpl", "getAllUsers", null);
         }
 
         return users;
     }
 
     public void cleanUsersTable() {
-        try (Connection connection = getConnection();
-             Statement statement = connection.createStatement()) {
-            statement.executeUpdate(CLEAR);
+        try (Connection connection = util.getConnection();
+             Statement s = connection.createStatement()) {
+            s.executeUpdate(CLEAR);
+            logger.info("Таблица users очищена", "UserDaoJDBCImpl", "cleanUsersTable", null);
         } catch (SQLException e) {
-            System.err.println("Таблица пользователь не очищена: " + e.getMessage());
-            e.printStackTrace(System.err);
+            logger.error("Таблица не очищена" + e.getMessage(),
+                    "UserDaoJDBCImpl", "cleanUsersTable", null);
         }
     }
 }
