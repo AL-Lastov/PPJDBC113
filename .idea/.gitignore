@@ -8,3 +8,28 @@
 /dataSources.local.xml
 # Игнорировать файлы с настройками БД
 src/main/resources/db.properties
+
+# Maven
+.mvn/
+target/
+*.jar
+*.war
+*.ear
+
+# IDE
+.idea/
+*.iml
+*.iws
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Build
+build/
+out/
+dist/

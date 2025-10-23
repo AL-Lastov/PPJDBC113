@@ -14,14 +14,22 @@ public class Util {
     public static final String DB_PASSWORD = "PASSWORD";
 
     private static Util inst;
-    private static Properties properties = new Properties();
     private Connection conn;
+    private static Properties properties = new Properties();
+
+    static {
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException("Driver",e);
+        }
+    }
 
     private Util() {
         System.out.println("ky ky");
     }
 
-    public static synchronized Util getInstance() {
+    public static Util getInstance() {
         if (inst == null) {
             inst = new Util();
         }
@@ -51,8 +59,6 @@ public class Util {
         }
         return conn;
     }
-
-    // Метод для закрытия соединения (опционально)
     public void closeConnection() throws SQLException {
         if (conn != null && !conn.isClosed()) {
             conn.close();

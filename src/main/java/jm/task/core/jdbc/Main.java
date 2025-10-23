@@ -1,40 +1,49 @@
 package jm.task.core.jdbc;
 
-import jm.task.core.jdbc.model.User;
-import jm.task.core.jdbc.service.LoggerService;
+
 import jm.task.core.jdbc.service.UserService;
 import jm.task.core.jdbc.service.UserServiceImpl;
-
+import jm.task.core.jdbc.util.Util;
 import java.sql.SQLException;
-import java.util.List;
+
 
 
 public class Main {
     public static void main(String[] args) {
-        try {
-            LoggerService logger = LoggerService.getInstance();
-            logger.setLogLevel(LoggerService.Level.DEBUG); // DEBUG, INFO, WARN, ERROR
+        UserService userService = null;
 
-            UserService userService = UserServiceImpl.getInstance();
+        try {
+            userService = new UserServiceImpl();
             userService.createUsersTable();
+
             userService.saveUser("SSS", "QQQ", (byte) 34);
             userService.saveUser("AAAA", "ZZZ", (byte) 56);
             userService.saveUser("EEEE", "RRR", (byte) 23);
 
 
-            System.out.println("Все пользователи:");
+            System.out.println("все");
             userService.getAllUsers();
-            System.out.println("удаляем первого:");
+            System.out.println("удаляем одного");
             userService.removeUserById(1);
-            System.out.println("Все пользователи:");
+            System.out.println("Все");
             userService.getAllUsers();
 
-//            // Очищаем таблицу
-//            userService.cleanUsersTable();
+
+             userService.cleanUsersTable();
+
+
+             userService.dropUsersTable();
 
         } catch (SQLException e) {
-            System.err.println("Ошибка при работе с БД: " + e.getMessage());
             e.printStackTrace();
+        } finally {
+            if (userService != null) {
+                try {
+                    Util.getInstance().closeConnection();
+                } catch (SQLException e) {
+                   e.printStackTrace();
+                }
+            }
         }
     }
 }
